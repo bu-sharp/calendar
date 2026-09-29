@@ -117,7 +117,7 @@ window.CALENDAR_SETTINGS = {
   .card-title { font-weight: 700; font-size: 0.95rem; line-height: 1.3; margin: 1px 0 3px; }
   .card-meta { font-size: 0.8rem; color: var(--muted); margin: 0; line-height: 1.4; }
   .card-topic { display: inline-block; margin-top: 6px; font-size: 0.74rem; font-weight: 700; color: color-mix(in srgb, var(--c) 78%, black); }
-  .thumb { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; background: var(--soft); }
+  .thumb { width: 54px; height: 54px; border-radius: 8px; object-fit: contain; background: var(--soft); }
   .side::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px; pointer-events: none;
     background: linear-gradient(to bottom, transparent, var(--secondary));
@@ -181,7 +181,22 @@ window.CALENDAR_SETTINGS = {
   }
   dialog::backdrop { background: rgba(20,28,48,.5); }
   .dlg-band { height: 8px; background: var(--c); }
-  .dlg-img { width: 100%; max-height: 300px; object-fit: cover; display: block; }
+  .dlg-media { background: var(--soft); display: flex; flex-direction: column; align-items: center; }
+  .dlg-media a { display: block; line-height: 0; }
+  .dlg-img { display: block; width: auto; height: auto; max-width: 100%; max-height: 420px; }
+  .dlg-hint { display: block; text-align: center; font-size: 0.78rem; color: var(--muted); padding: 6px 0 8px; }
+  /* Tall flyers: flyer on the left, details on the right */
+  dialog.portrait { width: min(880px, calc(100% - 24px)); }
+  dialog.portrait #dlgContent { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+  dialog.portrait .dlg-band { grid-column: 1 / -1; }
+  dialog.portrait .dlg-media { flex-direction: column; justify-content: flex-start; padding: 22px 0 16px 22px; background: none; }
+  dialog.portrait .dlg-img { max-height: 540px; border-radius: 8px; box-shadow: 0 4px 16px rgba(34,26,46,.16); }
+  dialog.portrait .dlg-hint { padding-top: 8px; }
+  @media (max-width: 700px) {
+    dialog.portrait #dlgContent { display: block; }
+    dialog.portrait .dlg-media { padding: 16px 16px 0; }
+    dialog.portrait .dlg-img { max-height: 65vh; }
+  }
   .dlg-body { padding: 22px 26px 26px; }
   .dlg-topic {
     display: inline-block; font-size: 0.78rem; font-weight: 700; margin: 0 0 10px;
@@ -544,9 +559,10 @@ window.CALENDAR_SETTINGS = {
     if (!ev) return;
     var col = topicColor(ev.topic);
     var when = longDate(ev.date) + (ev.endDate ? " – " + longDate(ev.endDate) : "");
-    var html = ev.image
-      ? '<img class="dlg-img" src="' + esc(ev.image) + '" alt="" onerror="this.outerHTML=\'<div class=dlg-band></div>\'">'
-      : '<div class="dlg-band"></div>';
+    var html = '<div class="dlg-band"></div>';
+    if (ev.image) html += '<div class="dlg-media" id="dlgMedia"><a href="' + esc(ev.image) + '" target="_blank" rel="noopener" aria-label="Open the full-size flyer in a new tab">' +
+      '<img class="dlg-img" id="dlgImg" src="' + esc(ev.image) + '" alt="Flyer for ' + esc(ev.title) + '"></a>' +
+      '<span class="dlg-hint">Click the flyer to open it full size</span></div>';
     html += '<div class="dlg-body">';
     if (ev.topic) html += '<p class="dlg-topic">' + esc(ev.topic) + "</p>";
     html += '<h2 class="dlg-title" id="dlgTitle">' + esc(ev.title) + "</h2>";
@@ -560,10 +576,25 @@ window.CALENDAR_SETTINGS = {
     html += '<button class="btn-ghost" id="ics">Add to my calendar</button></div></div>';
     var dlg = $("dlg");
     dlg.style.setProperty("--c", col);
+    dlg.classList.remove("portrait");
     $("dlgContent").innerHTML = html;
+    var img = $("dlgImg");
+    if (img) {
+      var fit = function () {
+        if (img.naturalHeight > img.naturalWidth * 1.1) dlg.classList.add("portrait");
+        placeDialog();
+      };
+      if (img.complete && img.naturalWidth) fit(); else img.onload = fit;
+      img.onerror = function () { var m = $("dlgMedia"); if (m) m.remove(); placeDialog(); };
+    }
     $("ics").onclick = function () { downloadICS(ev); };
     if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
-    // Inside a tall iframe, keep the popup near where the viewer clicked.
+    placeDialog();
+  }
+
+  // Inside a tall iframe, keep the popup near where the viewer clicked.
+  function placeDialog() {
+    var dlg = $("dlg");
     dlg.style.margin = "";
     if (lastClickY != null && window.innerHeight > 900) {
       var h = dlg.offsetHeight;
